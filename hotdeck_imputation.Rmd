@@ -1,0 +1,63 @@
+---
+title: "Hot Deck Imputation"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("~/UGA/Courses/Fall 2023/MIST 7635 Machine Learning Bus Analytics/Group Projects")
+library(caret)
+library(tidyverse)
+library(VIM)
+library(ROSE)
+```
+
+## Load data
+```{r}
+# Load the data
+dat <- read.csv("Data/wcgs.csv")
+```
+
+```{r}
+# Imputing cholesterol within domain
+dat_imp <- hotdeck(
+dat,
+variable = "chol",
+domain_var = c("smoke","dibpat"),
+ord_var = c("age","bmi"))
+
+# examine the imputed cholesterol value  
+dat_imp[is.na(dat$chol),"chol"]
+
+# Imputing arcus within domain
+dat_imp <- hotdeck(
+dat_imp,
+variable = "arcus",
+domain_var = c("smoke","dibpat"),
+ord_var = c("age","chol"))
+
+# examine the imputed arcus value  
+dat_imp[is.na(dat$arcus),"arcus"]
+
+```
+
+#### Split data
+```{r}
+set.seed(123)
+# create train/test split
+idx = createDataPartition(dat_imp$chd69, p=0.75, list=F)
+train.chd69 = dat_imp[idx,]
+test.chd69 = dat_imp[-idx,]
+
+write.csv(train.chd69, "Data/train.chd69.csv", row.names = F)
+write.csv(test.chd69, "Data/test.chd69.csv", row.names = F)
+```
+
+#### Implement over- and under-sampling for imbalanced data
+```{r}
+tain_data_balanced_over <- ovun.sample(factor(chd69) ~ age+bmi+lnsbp+dbp+chol+factor(dibpat)+factor(smoke)+factor(arcus),  
+                                  data = train.chd69, 
+                                  method = "over",N=4346, seed = 1)$data
+table(tain_data_balanced_over$chd69)
+```

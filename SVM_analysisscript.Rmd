@@ -13,120 +13,73 @@ library(VIM)
 library(kernlab)
 library(klaR)
 library(performanceEstimation)
-library(DMwR)
-library(ROSE)
+library(pROC)
+library(dplyr)
 ```
 
 ## Load data
 ```{r}
 # Load the data
-dat <- read.csv("wcgs.csv")
-```
-
-```{r}
-# Imputing cholesterol within domain
-dat_imp <- hotdeck(
-dat,
-variable = "chol",
-domain_var = c("smoke","dibpat"),
-ord_var = c("age","bmi"))
-
-# examine the imputed cholesterol value  
-dat_imp[is.na(dat$chol),"chol"]
-
-# Imputing arcus within domain
-dat_imp <- hotdeck(
-dat_imp,
-variable = "arcus",
-domain_var = c("smoke","dibpat"),
-ord_var = c("age","chol"))
-
-# examine the imputed arcus value  
-dat_imp[is.na(dat$arcus),"arcus"]
-
-```
-
-#### Split data
-```{r}
-set.seed(123)
-# create train/test split
-idx = createDataPartition(dat_imp$chd69, p=0.75, list=F)
-train.chd69 = dat_imp[idx,]
-test.chd69 = dat_imp[-idx,]
-```
-
-#### Implement over- and under-sampling for imbalanced data
-```{r}
-tain_data_balanced_over <- ovun.sample(factor(chd69) ~ age+bmi+lnsbp+dbp+chol+factor(dibpat)+factor(smoke)+factor(arcus),  
-                                  data = train.chd69, 
-                                  method = "over",N=4346, seed = 1)$data
-table(tain_data_balanced_over$chd69)
-
+train.chd69 <- read.csv("Data/train.chd69.csv")
+test.chd69 <- read.csv("Data/test.chd69.csv")
 ```
 
 #### Logistic regression
 ```{r}
-model <- glm(factor(chd69) ~ age+bmi+lnsbp+dbp+chol+factor(dibpat)+factor(smoke)+factor(arcus), data = tain_data_balanced_both, family = binomial)
+model <- glm(factor(chd69) ~ age+bmi+lnsbp+dbp+chol+factor(dibpat)+factor(smoke)+factor(arcus), data = train.chd69, family = binomial)
 summary(model)
 
 pred = predict(model, newdata = test.chd69, type="response")
 
-y_test = test.chd69$chd69
-y = ifelse(pred>0.5, 1, 0)
+y_test = ifelse(test.chd69$chd69 == "Yes", 1, 0)
+y_hat = ifelse(pred>0.5, 1, 0)
 
 # Confusion matrix
-table(y, y_test)
+table(y_hat, y_test)
 
-(497+46)/3154
+# MCR
+mean(y_hat!=y_test)
 
+# ROC
+plot.roc(y_test, pred, print.auc=T)
 ```
 
-#### SVM linear classifier
+#### Set Cross-validation set
 ```{r}
 set.seed(123)
-train_control = trainControl(method = "repeatedcv", number = 5, repeats = 5, savePred=T, classProb=T)
-x = train.chd69[,c("age","bmi","lnsbp","dbp","chol","dibpat","smoke","arcus")]
-y = train.chd69$chd69
-
-# Fit the model 
-svm1 <- train(x,y, 
-      
-              method = "nb", 
-              trControl = train_control,  
-              preProcess = c("center","scale"))
-#View the model
-svm1
-svm1$result
-#accuracy:0.9184288
-
-
-
-pred = predict(model, newdata = test.chd69, type="response")
-
-y_test = test.chd69$chd69
-y = ifelse(pred>0.5, 1, 0)
-
-# Confusion matrix
-table(y, y_test)
-
-(497+46)/3154
-
-
+train_control = trainControl(method = "repeatedcv", 
+                             number = 5, 
+                             repeats = 5, 
+                             savePred=T, 
+                             classProb=T)
 ```
-
 
 #### SVM linear classifier
 ```{r}
-
 # Fit the model 
-svm1 <- train(factor(chd69) ~ age+bmi+lnsbp+dbp+chol+factor(dibpat)+factor(smoke)+factor(arcus), data = tain_data_balanced_over, method = "svmLinear", trControl = train_control, preProcess = c("center","scale"))
+svm1 <- train(factor(chd69) ~ age+bmi+lnsbp+dbp+chol+factor(dibpat)+factor(smoke)+factor(arcus),
+              data = train.chd69, 
+              method = "svmLinear", 
+              trControl = train_control, preProcess = c("center","scale"))
 # Print the best tuning parameter sigma and C that maximizes model accuracy
 svm1
 svm1$bestTune
 #accuracy:0.9184288
+res1 <- as_tibble(svm1$results[which.min(svm1$results[,2]),])
+res1
 
+pred1 = predict(svm1, newdata = test.chd69, type="prob")
 
+y_hat = ifelse(pred1[,2]>0.5, 1, 0)
 
+# Confusion matrix
+table(y_hat, y_test)
+
+# MCR
+mean(y_hat!=y_test)
+
+# ROC
+plot.roc(as.numeric(y_test), pred1[,2], print.auc=T)
 ```
 
 ## Tune the hyperparameter Cost
@@ -142,39 +95,63 @@ svm2
 #### SVM Polynomial classifier
 ```{r}
 # Fit the model 
-svm3 <- train(factor(chd69) ~ age+bmi+lnsbp+dbp+chol+factor(dibpat)+factor(smoke)+factor(arcus), data = train.chd69, method = "svmPoly", trControl = train_control, preProcess = c("center","scale"))
+svm3 <- train(factor(chd69) ~ age+bmi+lnsbp+dbp+chol+factor(dibpat)+factor(smoke)+factor(arcus),
+              data = train.chd69, 
+              method = "svmPoly", 
+              trControl = train_control, preProcess = c("center","scale"))
 # Print the best tuning parameter sigma and C that maximizes model accuracy
 svm3
 svm3$bestTune
-#accuracy:0.9184288
+#accuracy:0
+.9184288
 res3 <- as_tibble(svm3$results[which.min(svm3$results[,2]),])
 res3
 
+pred3 = predict(svm3, newdata = test.chd69, type="prob")
+
+y_hat = ifelse(pred3[,2]>0.5, 1, 0)
+
+# Confusion matrix
+table(y_hat, y_test)
+
+# MCR
+mean(y_hat!=y_test)
+
+# ROC
+plot.roc(as.numeric(y_test), pred3[,2], print.auc=T)
 ```
 
 #### SVM Radical classifier
 ```{r}
 # Fit the model 
-svm4 <- train(factor(chd69) ~ age+bmi+lnsbp+dbp+chol+factor(dibpat)+factor(smoke)+factor(arcus), data = train.chd69, method = "svmRadial", trControl = train_control, preProcess = c("center","scale"))
+svm4 <- train(factor(chd69) ~ age+bmi+lnsbp+dbp+chol+factor(dibpat)+factor(smoke)+factor(arcus),
+              data = train.chd69, 
+              method = "svmRadial", 
+              trControl = train_control, 
+              preProcess = c("center","scale"))
 # Print the best tuning parameter sigma and C that maximizes model accuracy
 svm4$results
 svm4$bestTune
 #accuracy:0.9184286	
 res4 <- as_tibble(svm4$results[which.min(svm4$results[,2]),])
 res4
+
+pred4 = predict(svm4, newdata = test.chd69, type="prob")
+
+y_hat = ifelse(pred4[,2]>0.5, 1, 0)
+
+# Confusion matrix
+table(y_hat, y_test)
+
+# MCR
+mean(y_hat!=y_test)
+
+# ROC
+plot.roc(as.numeric(y_test), pred3[,2], print.auc=T)
 ```
 
 #### Performance evaluation on testing set
 ```{r}
-pred1 = predict(svm1, newdata = test.chd69, type="prob")
-pred3 = predict(model_qda,test)$posterior[,"1"]
-pred4 = predict(model_nb,test,type="raw")[,"1"]
-
-y_test = test.chd69$chd69
-y_1 = ifelse(pred1[,2]>0.5, 1, 0)
-y_3 = ifelse(pred3[,2]>0.5, 1, 0)
-y_4 = ifelse(pred4[,2]>0.5, 1, 0)
-
 # Confusion matrix
 table(y_1, y_test)
 table(y_2, y_test)
@@ -185,9 +162,33 @@ df<-tibble(Model=c('SVM Linear','SVM Poly','SVM Radical'),
            Accuracy=c(svm1$results[2][[1]],res3$Accuracy,res4$Accuracy))
 df %>% arrange(Accuracy)
 
+```
+
+
+#### Naive Bayes for addressing imbalanced classes
+```{r}
+x = train.chd69[,c("age","bmi","lnsbp","dbp","chol","dibpat","smoke","arcus")]
+y = train.chd69$chd69
+
+# Fit the model 
+nb <- train(x,y, 
+            method = "nb", 
+            trControl = train_control,  
+            preProcess = c("center","scale"))
+#View the model
+svm
+svm$result
+
+pred = predict(nb, newdata = test.chd69, type="prob")
+
+# Confusion matrix
+table(y_hat, y_test)
+
+# MCR
+mean(y_hat!=y_test)
+
 # ROC
-
-
+plot.roc(as.numeric(y_test), pred[,2], print.auc=T)
 ```
 
 
