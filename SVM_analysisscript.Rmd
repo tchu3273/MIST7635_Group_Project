@@ -1,5 +1,6 @@
 ---
 title: "SVM Analysis"
+author: "Tzu-Chun Chu"
 output: html_document
 date: "`r Sys.Date()`"
 ---
@@ -41,10 +42,12 @@ train.chd69 <-
 		   smoke =factor(smoke),
 		   arcus =factor(arcus))
 
-tain_data_balanced_over <- ovun.sample(chd69 ~ age+bmi+lnsbp+dbp+chol+dibpat+smoke+arcus,  
+train_data_balanced_over <- ovun.sample(chd69 ~ age+bmi+lnsbp+dbp+chol+dibpat+smoke+arcus,  
                                   data = train.chd69, 
                                   method = "over",N=4346, seed = 1)$data
-table(tain_data_balanced_over$chd69)
+table(train_data_balanced_over$chd69)
+
+write.csv(train_data_balanced_over,"train_data_balanced_over.csv",row.names = F)
 ```
 
 
@@ -78,8 +81,6 @@ confusionMatrix(data = factor(y_hat, levels=1:0), reference =factor(y_test, leve
 ```
 
 
-
-
 #### Set Cross-validation set
 ```{r}
 set.seed(123)
@@ -94,7 +95,7 @@ train_control = trainControl(method = "repeatedcv",
 ```{r}
 # Fit the model 
 svm1 <- train(factor(chd69) ~ age+bmi+lnsbp+dbp+chol+factor(dibpat)+factor(smoke)+factor(arcus),
-              data = tain_data_balanced_over, 
+              data = train_data_balanced_over, 
               method = "svmLinear", 
               trControl = train_control, preProcess = c("center","scale"))
 # Print the best tuning parameter sigma and C that maximizes model accuracy
@@ -128,7 +129,7 @@ plot(roc_imp1, main = "Variable Important with Linear Kernel SVM Model")
 # Fit the model 
 tunegrid=data.frame(C=c(0.1, 1, 10, 100))
 
-svm2 <- train(factor(chd69) ~ age+bmi+lnsbp+dbp+chol+factor(dibpat)+factor(smoke)+factor(arcus), data = tain_data_balanced_over, method = "svmLinear", trControl = train_control,  preProcess = c("center","scale"), tuneGrid = tunegrid) # might just use the default
+svm2 <- train(factor(chd69) ~ age+bmi+lnsbp+dbp+chol+factor(dibpat)+factor(smoke)+factor(arcus), data = train_data_balanced_over, method = "svmLinear", trControl = train_control,  preProcess = c("center","scale"), tuneGrid = tunegrid) # might just use the default
 #View the model
 svm2
 ```
@@ -137,7 +138,7 @@ svm2
 ```{r}
 # Fit the model 
 svm3 <- train(factor(chd69) ~ age+bmi+lnsbp+dbp+chol+factor(dibpat)+factor(smoke)+factor(arcus),
-              data = tain_data_balanced_over, 
+              data = train_data_balanced_over, 
               method = "svmPoly", 
               trControl = train_control, preProcess = c("center","scale"))
 # Print the best tuning parameter sigma and C that maximizes model accuracy
@@ -170,7 +171,7 @@ plot(roc_imp3)
 ```{r}
 # Fit the model 
 svm4 <- train(factor(chd69) ~ age+bmi+lnsbp+dbp+chol+factor(dibpat)+factor(smoke)+factor(arcus),
-              data = tain_data_balanced_over, 
+              data = train_data_balanced_over, 
               method = "svmRadial", 
               trControl = train_control, 
               preProcess = c("center","scale"))
@@ -209,9 +210,9 @@ table(y_hat3, y_test)
 table(y_hat4, y_test)
 
 
-confusionMatrix(data = factor(y_hat1), reference =factor(y_test))
-confusionMatrix(data = factor(y_hat3), reference =factor(y_test))
-confusionMatrix(data = factor(y_hat4), reference =factor(y_test))
+confusionMatrix(data = factor(y_hat1, levels=1:0), reference = factor(y_test, levels=1:0))
+confusionMatrix(data = factor(y_hat3, levels=1:0), reference = factor(y_test, levels=1:0))
+confusionMatrix(data = factor(y_hat4, levels=1:0), reference = factor(y_test, levels=1:0))
 
   # Accuracy
 df<-tibble(Model=c('SVM Linear','SVM Poly','SVM Radical'),

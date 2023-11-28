@@ -74,14 +74,14 @@ test.chd69 <-
 		   smoke =factor(smoke),
 		   arcus =factor(arcus))
 
-# Select the columns that we are going to use for the testing set 
-test_data<- test.chd69[, c('age','bmi','lnsbp','dbp','chol','dibpat','smoke','arcus','chd69')]
-missing_counts <- colSums(is.na(test_data))
+# # Select the columns that we are going to use for the testing set 
+# test_data<- test.chd69[, c('age','bmi','lnsbp','dbp','chol','dibpat','smoke','arcus','chd69')]
+# missing_counts <- colSums(is.na(test_data))
 
-pred = predict(rf.model, test_data, type='response')
+pred = predict(rf_tuning, test.chd69, type='prob')
 
-y_test = ifelse(test_data$chd69 == "Yes", 1, 0)
-y_hat = ifelse(pred>0.5, 1, 0)
+y_test = ifelse(test.chd69$chd69 == "Yes", 1, 0)
+y_hat = ifelse(pred[,2]>0.5, 1, 0)
 
 # Confusion matrix
 table(y_hat, y_test)
@@ -90,7 +90,9 @@ table(y_hat, y_test)
 mean(y_hat!=y_test)
 
 # ROC
-plot.roc(y_test, pred, print.auc=T)
+plot.roc(as.numeric(y_test), pred[,2], print.auc=T)
+
+confusionMatrix(data = factor(y_hat4), reference =factor(y_test))
 
 confusionMatrix(data = factor(y_hat), reference =factor(y_test))
 ```
