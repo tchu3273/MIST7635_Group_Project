@@ -54,10 +54,19 @@ write.csv(train.chd69, "Data/train.chd69.csv", row.names = F)
 write.csv(test.chd69, "Data/test.chd69.csv", row.names = F)
 ```
 
-#### Implement over- and under-sampling for imbalanced data
+#### Descriptive analysis
 ```{r}
-tain_data_balanced_over <- ovun.sample(factor(chd69) ~ age+bmi+lnsbp+dbp+chol+factor(dibpat)+factor(smoke)+factor(arcus),  
-                                  data = train.chd69, 
-                                  method = "over",N=4346, seed = 1)$data
-table(tain_data_balanced_over$chd69)
+table <-
+  dat %>% 
+  select(age,bmi,lnsbp,dbp,chol,dibpat,smoke,arcus,chd69) %>% 
+  tbl_summary(
+    by = chd69, 
+    missing = "no" # don't list missing data separately
+  ) %>%
+  add_n() %>% # add column with total number of non-missing observations
+  add_p() %>% # test for a difference between groups
+  modify_header(label = "**Variable**") %>% # update the column header
+  bold_labels()
+
+table
 ```

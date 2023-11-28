@@ -15,19 +15,49 @@ library(klaR)
 library(performanceEstimation)
 library(pROC)
 library(dplyr)
+library(ROSE)
+library(gtsummary)
 ```
 
 ## Load data
 ```{r}
 # Load the data
+dat <- read.csv("Data/wcgs.csv")
 train.chd69 <- read.csv("Data/train.chd69.csv")
 test.chd69 <- read.csv("Data/test.chd69.csv")
 ```
 
+
+#### Implement over-sampling for imbalanced data
+```{r}
+table(dat$chd69)
+# cases: 0.081, imbalanced cases
+
+# Factor all nominal variables
+train.chd69 <-
+	train.chd69 %>% 
+	mutate(chd69 =factor(chd69),
+		   dibpat =factor(dibpat),
+		   smoke =factor(smoke),
+		   arcus =factor(arcus))
+
+tain_data_balanced_over <- ovun.sample(chd69 ~ age+bmi+lnsbp+dbp+chol+dibpat+smoke+arcus,  
+                                  data = train.chd69, 
+                                  method = "over",N=4346, seed = 1)$data
+table(tain_data_balanced_over$chd69)
+```
+
+
 #### Logistic regression
 ```{r}
+# Logistic regression model
+train.chd69 <-
+train.chd69 %>% 
+  mutate(dibpat = factor(dibpat,
+                        levels = c("Type B","Type A")))
 model <- glm(factor(chd69) ~ age+bmi+lnsbp+dbp+chol+factor(dibpat)+factor(smoke)+factor(arcus), data = train.chd69, family = binomial)
 summary(model)
+exp(model$coefficients)
 
 pred = predict(model, newdata = test.chd69, type="response")
 
@@ -42,7 +72,13 @@ mean(y_hat!=y_test)
 
 # ROC
 plot.roc(y_test, pred, print.auc=T)
+
+confusionMatrix(data = factor(y_hat), reference =factor(y_test))
+
 ```
+
+
+
 
 #### Set Cross-validation set
 ```{r}
@@ -58,7 +94,7 @@ train_control = trainControl(method = "repeatedcv",
 ```{r}
 # Fit the model 
 svm1 <- train(factor(chd69) ~ age+bmi+lnsbp+dbp+chol+factor(dibpat)+factor(smoke)+factor(arcus),
-              data = train.chd69, 
+              data = tain_data_balanced_over, 
               method = "svmLinear", 
               trControl = train_control, preProcess = c("center","scale"))
 # Print the best tuning parameter sigma and C that maximizes model accuracy
@@ -70,16 +106,21 @@ res1
 
 pred1 = predict(svm1, newdata = test.chd69, type="prob")
 
-y_hat = ifelse(pred1[,2]>0.5, 1, 0)
+y_hat1 = ifelse(pred1[,2]>0.5, 1, 0)
 
 # Confusion matrix
-table(y_hat, y_test)
+table(y_hat1, y_test)
 
 # MCR
 mean(y_hat!=y_test)
 
 # ROC
 plot.roc(as.numeric(y_test), pred1[,2], print.auc=T)
+
+# Variable importance
+roc_imp1 <- varImp(svm1, scale=FALSE)
+roc_imp1
+plot(roc_imp1, main = "Variable Important with Linear Kernel SVM Model")
 ```
 
 ## Tune the hyperparameter Cost
@@ -87,7 +128,7 @@ plot.roc(as.numeric(y_test), pred1[,2], print.auc=T)
 # Fit the model 
 tunegrid=data.frame(C=c(0.1, 1, 10, 100))
 
-svm2 <- train(factor(chd69) ~ age+bmi+lnsbp+dbp+chol+factor(dibpat)+factor(smoke)+factor(arcus), data = train.chd69, method = "svmLinear", trControl = train_control,  preProcess = c("center","scale"), tuneGrid = tunegrid) # might just use the default
+svm2 <- train(factor(chd69) ~ age+bmi+lnsbp+dbp+chol+factor(dibpat)+factor(smoke)+factor(arcus), data = tain_data_balanced_over, method = "svmLinear", trControl = train_control,  preProcess = c("center","scale"), tuneGrid = tunegrid) # might just use the default
 #View the model
 svm2
 ```
@@ -96,40 +137,45 @@ svm2
 ```{r}
 # Fit the model 
 svm3 <- train(factor(chd69) ~ age+bmi+lnsbp+dbp+chol+factor(dibpat)+factor(smoke)+factor(arcus),
-              data = train.chd69, 
+              data = tain_data_balanced_over, 
               method = "svmPoly", 
               trControl = train_control, preProcess = c("center","scale"))
 # Print the best tuning parameter sigma and C that maximizes model accuracy
 svm3
 svm3$bestTune
-#accuracy:0
-.9184288
+#accuracy:0.9184288
 res3 <- as_tibble(svm3$results[which.min(svm3$results[,2]),])
 res3
 
 pred3 = predict(svm3, newdata = test.chd69, type="prob")
 
-y_hat = ifelse(pred3[,2]>0.5, 1, 0)
+y_hat3 = ifelse(pred3[,2]>0.5, 1, 0)
 
 # Confusion matrix
-table(y_hat, y_test)
+table(y_hat3, y_test)
 
 # MCR
-mean(y_hat!=y_test)
+mean(y_hat3!=y_test)
 
 # ROC
 plot.roc(as.numeric(y_test), pred3[,2], print.auc=T)
+
+# Variable importance
+roc_imp3 <- varImp(svm3, scale=FALSE)
+roc_imp3
+plot(roc_imp3)
 ```
 
 #### SVM Radical classifier
 ```{r}
 # Fit the model 
 svm4 <- train(factor(chd69) ~ age+bmi+lnsbp+dbp+chol+factor(dibpat)+factor(smoke)+factor(arcus),
-              data = train.chd69, 
+              data = tain_data_balanced_over, 
               method = "svmRadial", 
               trControl = train_control, 
               preProcess = c("center","scale"))
 # Print the best tuning parameter sigma and C that maximizes model accuracy
+svm4
 svm4$results
 svm4$bestTune
 #accuracy:0.9184286	
@@ -138,30 +184,54 @@ res4
 
 pred4 = predict(svm4, newdata = test.chd69, type="prob")
 
-y_hat = ifelse(pred4[,2]>0.5, 1, 0)
+y_hat4 = ifelse(pred4[,2]>0.5, 1, 0)
 
 # Confusion matrix
-table(y_hat, y_test)
+table(y_hat4, y_test)
 
 # MCR
-mean(y_hat!=y_test)
+mean(y_hat4!=y_test)
 
 # ROC
-plot.roc(as.numeric(y_test), pred3[,2], print.auc=T)
+plot.roc(as.numeric(y_test), pred4[,2], print.auc=T)
+
+# Variable importance
+roc_imp4 <- varImp(svm4, scale=FALSE)
+roc_imp4
+plot(roc_imp4)
 ```
 
 #### Performance evaluation on testing set
 ```{r}
 # Confusion matrix
-table(y_1, y_test)
-table(y_2, y_test)
-table(y_3, y_test)
+table(y_hat1, y_test)
+table(y_hat3, y_test)
+table(y_hat4, y_test)
+
+
+confusionMatrix(data = factor(y_hat1), reference =factor(y_test))
+confusionMatrix(data = factor(y_hat3), reference =factor(y_test))
+confusionMatrix(data = factor(y_hat4), reference =factor(y_test))
 
 # Accuracy
 df<-tibble(Model=c('SVM Linear','SVM Poly','SVM Radical'),
            Accuracy=c(svm1$results[2][[1]],res3$Accuracy,res4$Accuracy))
 df %>% arrange(Accuracy)
 
+# ROC of all three models
+plot.roc(as.numeric(y_test), pred1[,2], col="salmon", print.auc=T)
+plot.roc(as.numeric(y_test), pred3[,2], col="goldenrod", lwd=2, lty=2, add=TRUE, print.auc=T, print.auc.y=0.4)
+plot.roc(as.numeric(y_test), pred4[,2], col="lightsteelblue", lwd=2, lty=2, add=TRUE, print.auc=T, print.auc.y=0.3)
+
+# Add legend
+legend("bottom",
+       legend=c("Linear Kernel SVM", "Poly Kernel SVM", "RBF Kernel SVM"),
+       col=c("salmon", "goldenrod", "lightsteelblue"),
+       lwd=4, cex =0.7, xpd = TRUE, horiz = TRUE)
+
+# Add title
+title(main = "Receiver Operating Characteristic Curves of SVM Models",
+      line = 3)
 ```
 
 
@@ -176,10 +246,9 @@ nb <- train(x,y,
             trControl = train_control,  
             preProcess = c("center","scale"))
 #View the model
-svm
-svm$result
+nb$results
 
-pred = predict(nb, newdata = test.chd69, type="prob")
+pred5 = predict(nb, newdata = test.chd69, type="prob")
 
 # Confusion matrix
 table(y_hat, y_test)
