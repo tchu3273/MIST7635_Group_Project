@@ -1,5 +1,6 @@
 ---
 title: "Hot Deck Imputation"
+author: "Tzu-Chun Chu"
 output: html_document
 date: "`r Sys.Date()`"
 ---

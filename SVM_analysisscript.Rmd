@@ -73,7 +73,7 @@ mean(y_hat!=y_test)
 # ROC
 plot.roc(y_test, pred, print.auc=T)
 
-confusionMatrix(data = factor(y_hat), reference =factor(y_test))
+confusionMatrix(data = factor(y_hat, levels=1:0), reference =factor(y_test, levels=1:0))
 
 ```
 
@@ -213,7 +213,7 @@ confusionMatrix(data = factor(y_hat1), reference =factor(y_test))
 confusionMatrix(data = factor(y_hat3), reference =factor(y_test))
 confusionMatrix(data = factor(y_hat4), reference =factor(y_test))
 
-# Accuracy
+  # Accuracy
 df<-tibble(Model=c('SVM Linear','SVM Poly','SVM Radical'),
            Accuracy=c(svm1$results[2][[1]],res3$Accuracy,res4$Accuracy))
 df %>% arrange(Accuracy)
