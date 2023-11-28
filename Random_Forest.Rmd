@@ -1,0 +1,106 @@
+---
+title: "MIST7635 Project"
+author: "Joy Bick"
+date: "2023-10-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ISLR2)
+library(randomForest)
+library(gbm)
+library(xgboost)
+library(caret)
+library(tidyverse)
+library(pROC)
+```
+
+#Load the data
+```{r}
+# Load the data
+dat <- read.csv("wcgs.csv")
+train.chd69 <- read.csv("train.chd69.csv")
+test.chd69 <- read.csv("test.chd69.csv")
+```
+
+# Random Forest
+```{r}
+# Factor all nominal variables
+train.chd69 <-
+	train.chd69 %>% 
+	mutate(chd69 =factor(chd69),
+		   dibpat =factor(dibpat),
+		   smoke =factor(smoke),
+		   arcus =factor(arcus))
+
+# Select the columns that we are going to use for the training set 
+train_data <- train.chd69[, c('age','bmi','lnsbp','dbp','chol','dibpat','smoke','arcus','chd69')]
+missing_counts <- colSums(is.na(train_data))
+
+# Set Cross-validation set
+set.seed(123)
+
+# Set tunegrid
+tunegrid = expand.grid(.mtry=1:8)
+rf_tuning = train(factor(chd69)~age+bmi+lnsbp+dbp+chol+factor(dibpat)+factor(smoke)+
+                    factor(arcus),
+                    data=train_data, 
+                    method='rf',  
+                    tuneGrid=tunegrid, 
+                    trControl=trainControl(method="cv", number=5))
+rf_tuning
+plot(rf_tuning)
+rf.model = rf_tuning$finalModel
+```
+# RF Feature Importance 
+```{r}
+importance(rf.model)
+varImpPlot(rf_tuning$finalModel,
+           sort = T,
+           main = "Variable Importance")
+```
+# RF Model Assessment 
+```{r}
+set.seed(123)
+# Factor all nominal variables
+test.chd69 <-
+	test.chd69 %>%
+	mutate(chd69 =factor(chd69),
+		   dibpat =factor(dibpat),
+		   smoke =factor(smoke),
+		   arcus =factor(arcus))
+
+# Select the columns that we are going to use for the testing set 
+test_data<- test.chd69[, c('age','bmi','lnsbp','dbp','chol','dibpat','smoke','arcus','chd69')]
+missing_counts <- colSums(is.na(test_data))
+
+pred = predict(rf.model, test_data, type='response')
+
+y_test = ifelse(test_data$chd69 == "Yes", 1, 0)
+y_hat = ifelse(pred>0.5, 1, 0)
+
+# Confusion matrix
+table(y_hat, y_test)
+
+# MCR
+mean(y_hat!=y_test)
+
+# ROC
+plot.roc(y_test, pred, print.auc=T)
+
+confusionMatrix(data = factor(y_hat), reference =factor(y_test))
+```
+```
+
+
+
+
+
+
+
+
+
